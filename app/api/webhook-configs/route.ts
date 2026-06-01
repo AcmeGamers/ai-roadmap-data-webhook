@@ -56,6 +56,31 @@ export async function POST(req: NextRequest) {
   return NextResponse.json(toWebhook(data), { status: 201 })
 }
 
+export async function PATCH(req: NextRequest) {
+  const supabase = await createClient()
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  if (authError || !user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const id = req.nextUrl.searchParams.get('id')
+  if (!id) return NextResponse.json({ error: 'id is required' }, { status: 400 })
+
+  const body = await req.json()
+  const { name, url } = body as { name: string; url: string }
+
+  const { data, error } = await supabase
+    .from('webhook_configs')
+    .update({ name: name ?? '', webhook_url: url })
+    .eq('id', id)
+    .eq('user_id', user.id)
+    .select()
+    .single()
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json(toWebhook(data))
+}
+
 export async function DELETE(req: NextRequest) {
   const supabase = await createClient()
   const { data: { user }, error: authError } = await supabase.auth.getUser()

@@ -1,304 +1,256 @@
-'use client'
+"use client";
 
-import { useState, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
-import Link from 'next/link'
-import { createClient } from '@/lib/supabase/client'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from '@/components/ui/card'
-import { Loader2, Send, CheckCircle2 } from 'lucide-react'
-import Nav from '@/components/nav'
-import type { Webhook, SubmissionFormData } from '@/types'
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { createClient } from "@/lib/supabase/client";
+import { useApp } from "@/context/app-context";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
+import { Loader2, Send, CheckCircle2 } from "lucide-react";
+import { toast } from "sonner";
+import Nav from "@/components/nav";
+import type { SubmissionFormData } from "@/types";
 
 const defaultFormData: SubmissionFormData = {
-  pricingType: 'AUD',
-  slidesURL: '',
-  docsURL: '',
-  feasibilitySheetURL: '',
-  enrichedInputSheetURL: '',
+  pricingType: "AUD",
+  slidesURL: "",
+  docsURL: "",
+  feasibilitySheetURL: "",
+  enrichedInputSheetURL: "",
   webhookIds: [],
-}
+};
+
+const FIELDS = [
+  { key: "slidesURL", label: "Template Slides URL" },
+  { key: "docsURL", label: "Template Docs URL" },
+  { key: "feasibilitySheetURL", label: "Feasibility Sheet URL" },
+  { key: "enrichedInputSheetURL", label: "Enriched Input Sheet URL" },
+] as const;
 
 export default function NewSubmissionPage() {
-  const router = useRouter()
-  const [loading, setLoading] = useState(true)
-  const [webhooks, setWebhooks] = useState<Webhook[]>([])
-  const [formData, setFormData] = useState<SubmissionFormData>(defaultFormData)
-  const [submitting, setSubmitting] = useState(false)
-  const [success, setSuccess] = useState(false)
+  const router = useRouter();
+  const { webhooks, loadWebhooks, addSubmission } = useApp();
+  const [authLoading, setAuthLoading] = useState(true);
+  const [formData, setFormData] = useState<SubmissionFormData>(defaultFormData);
+  const [submitting, setSubmitting] = useState(false);
+  const [success, setSuccess] = useState(false);
 
   useEffect(() => {
     const init = async () => {
-      const supabase = createClient()
-      const { data: { user: authUser } } = await supabase.auth.getUser()
-
-      if (!authUser) {
-        router.push('/auth/login')
-        return
+      const supabase = createClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
+        router.push("/auth/login");
+        return;
       }
-
-      try {
-        const res = await fetch('/api/webhook-configs')
-        if (res.ok) {
-          const data: Webhook[] = await res.json()
-          setWebhooks(data)
-        }
-      } catch {
-        // ignore fetch errors on load
-      }
-
-      setLoading(false)
-    }
-
-    init()
-  }, [router])
+      await loadWebhooks();
+      setAuthLoading(false);
+    };
+    init();
+  }, [router, loadWebhooks]);
 
   const toggleWebhook = (id: string) => {
-    setFormData((prev) => {
-      const already = prev.webhookIds.includes(id)
-      return {
-        ...prev,
-        webhookIds: already
-          ? prev.webhookIds.filter((wid) => wid !== id)
-          : [...prev.webhookIds, id],
-      }
-    })
-  }
+    setFormData((prev) => ({
+      ...prev,
+      webhookIds: prev.webhookIds.includes(id)
+        ? prev.webhookIds.filter((w) => w !== id)
+        : [...prev.webhookIds, id],
+    }));
+  };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setSubmitting(true)
-    try {
-      const res = await fetch('/api/submissions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
-      })
-      if (res.ok) {
-        setSuccess(true)
-      }
-    } finally {
-      setSubmitting(false)
+  const handleSubmit = async () => {
+    setSubmitting(true);
+    const result = await addSubmission(formData);
+    setSubmitting(false);
+    if (!result) {
+      toast.error("Failed to submit");
+      return;
     }
-  }
+    setSuccess(true);
+  };
 
-  if (loading) {
+  if (authLoading)
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <Loader2 className="h-8 w-8 animate-spin text-slate-600" />
+        <Loader2 className="h-8 w-8 animate-spin text-slate-400" />
       </div>
-    )
-  }
+    );
 
   return (
     <div className="flex h-screen bg-background">
       <Nav />
-      <main className="flex-1 overflow-auto p-8">
-        <div className="max-w-2xl mx-auto">
-          {success ? (
-            <Card className="border-green-200 bg-green-50">
-              <CardHeader>
-                <div className="flex items-center gap-3">
-                  <CheckCircle2 className="h-6 w-6 text-green-600" />
-                  <CardTitle className="text-green-800">Submission sent</CardTitle>
+
+      {success ? (
+        <main className="flex-1 flex items-center justify-center">
+          <div className="text-center space-y-4">
+            <CheckCircle2 className="h-12 w-12 text-green-500 mx-auto" />
+            <h2 className="text-xl font-semibold">Submitted successfully</h2>
+            <p className="text-slate-500 text-sm">
+              Your data has been sent to the selected webhooks.
+            </p>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setSuccess(false);
+                setFormData(defaultFormData);
+              }}
+            >
+              Submit another
+            </Button>
+          </div>
+        </main>
+      ) : (
+        <main className="flex-1 flex overflow-hidden">
+          {/* Left — fields */}
+          <div className="flex-1 overflow-auto p-8 border-r border-slate-100">
+            <h1 className="text-xl font-semibold mb-1">New Submission</h1>
+            <p className="text-sm text-slate-500 mb-8">
+              Fill in the template URLs and details
+            </p>
+
+            <div className="space-y-6">
+              {/* Pricing type */}
+              <div className="space-y-2">
+                <Label>Pricing Type</Label>
+                <div className="flex gap-2">
+                  {(["AUD", "USD"] as const).map((type) => (
+                    <button
+                      key={type}
+                      type="button"
+                      onClick={() =>
+                        setFormData((prev) => ({ ...prev, pricingType: type }))
+                      }
+                      className={`px-5 py-2 rounded-md border text-sm font-medium transition-colors ${
+                        formData.pricingType === type
+                          ? "bg-slate-900 text-white border-slate-900"
+                          : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                      }`}
+                    >
+                      {type}
+                    </button>
+                  ))}
                 </div>
-                <CardDescription className="text-green-700">
-                  Your data has been submitted successfully.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setSuccess(false)
-                    setFormData(defaultFormData)
-                  }}
-                >
-                  Submit another
-                </Button>
-              </CardContent>
-            </Card>
-          ) : (
-            <>
-              <div className="mb-8">
-                <h1 className="text-2xl font-bold text-slate-900">New Submission</h1>
-                <p className="text-slate-500 mt-1">
-                  Fill in the details and select where to send the data
-                </p>
               </div>
 
-              <form onSubmit={handleSubmit} className="space-y-6">
-                {/* Pricing Type */}
-                <div className="space-y-2">
-                  <Label>Pricing Type</Label>
-                  <div className="flex gap-2">
-                    {(['AUD', 'USD'] as const).map((type) => (
-                      <button
-                        key={type}
-                        type="button"
-                        onClick={() =>
-                          setFormData((prev) => ({ ...prev, pricingType: type }))
-                        }
-                        className={`px-4 py-2 rounded-md border text-sm font-medium transition-colors ${
-                          formData.pricingType === type
-                            ? 'bg-slate-900 text-white border-slate-900'
-                            : 'border-slate-300 text-slate-700 hover:bg-slate-50'
+              <Separator />
+
+              {/* URL fields */}
+              {FIELDS.map(({ key, label }) => (
+                <div key={key} className="space-y-2">
+                  <Label htmlFor={key}>{label}</Label>
+                  <Input
+                    id={key}
+                    type="url"
+                    placeholder="https://..."
+                    value={formData[key]}
+                    onChange={(e) =>
+                      setFormData((prev) => ({
+                        ...prev,
+                        [key]: e.target.value,
+                      }))
+                    }
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Right — send panel */}
+          <div className="w-72 shrink-0 flex flex-col p-6 bg-slate-50">
+            <h2 className="text-sm font-semibold text-slate-700 mb-1">
+              Send to
+            </h2>
+            <p className="text-xs text-slate-400 mb-4">
+              Select one or more webhooks
+            </p>
+
+            {webhooks.length === 0 ? (
+              <p className="text-xs text-slate-500 flex-1">
+                No webhooks yet.{" "}
+                <Link
+                  href="/settings"
+                  className="underline underline-offset-2 text-slate-700 hover:text-slate-900"
+                >
+                  Add one in Settings.
+                </Link>
+              </p>
+            ) : (
+              <div className="flex-1 space-y-2 overflow-auto">
+                {webhooks.map((webhook) => {
+                  const selected = formData.webhookIds.includes(webhook.id);
+                  return (
+                    <button
+                      key={webhook.id}
+                      type="button"
+                      onClick={() => toggleWebhook(webhook.id)}
+                      className={`w-full text-left flex items-start gap-2.5 p-3 rounded-lg border transition-colors ${
+                        selected
+                          ? "bg-white border-slate-300 shadow-sm"
+                          : "bg-transparent border-slate-200 hover:bg-white"
+                      }`}
+                    >
+                      <div
+                        className={`mt-0.5 h-4 w-4 rounded border shrink-0 flex items-center justify-center ${
+                          selected
+                            ? "bg-slate-900 border-slate-900"
+                            : "border-slate-300"
                         }`}
                       >
-                        {type}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* URL Fields */}
-                <div className="space-y-2">
-                  <Label htmlFor="slidesURL">Template Slides URL</Label>
-                  <Input
-                    id="slidesURL"
-                    type="url"
-                    placeholder="https://..."
-                    value={formData.slidesURL}
-                    onChange={(e) =>
-                      setFormData((prev) => ({ ...prev, slidesURL: e.target.value }))
-                    }
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="docsURL">Template Docs URL</Label>
-                  <Input
-                    id="docsURL"
-                    type="url"
-                    placeholder="https://..."
-                    value={formData.docsURL}
-                    onChange={(e) =>
-                      setFormData((prev) => ({ ...prev, docsURL: e.target.value }))
-                    }
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="feasibilitySheetURL">Feasibility Sheet URL</Label>
-                  <Input
-                    id="feasibilitySheetURL"
-                    type="url"
-                    placeholder="https://..."
-                    value={formData.feasibilitySheetURL}
-                    onChange={(e) =>
-                      setFormData((prev) => ({
-                        ...prev,
-                        feasibilitySheetURL: e.target.value,
-                      }))
-                    }
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="enrichedInputSheetURL">Enriched Input Sheet URL</Label>
-                  <Input
-                    id="enrichedInputSheetURL"
-                    type="url"
-                    placeholder="https://..."
-                    value={formData.enrichedInputSheetURL}
-                    onChange={(e) =>
-                      setFormData((prev) => ({
-                        ...prev,
-                        enrichedInputSheetURL: e.target.value,
-                      }))
-                    }
-                  />
-                </div>
-
-                {/* Send To */}
-                <div className="space-y-3">
-                  <Label>Send to</Label>
-                  {webhooks.length === 0 ? (
-                    <p className="text-sm text-slate-500">
-                      No webhooks configured.{' '}
-                      <Link
-                        href="/settings"
-                        className="text-slate-900 underline underline-offset-2 hover:text-slate-600"
-                      >
-                        Go to Settings
-                      </Link>{' '}
-                      to add one.
-                    </p>
-                  ) : (
-                    <div className="space-y-2">
-                      {webhooks.map((webhook) => {
-                        const selected = formData.webhookIds.includes(webhook.id)
-                        return (
-                          <div
-                            key={webhook.id}
-                            onClick={() => toggleWebhook(webhook.id)}
-                            className={`flex items-center gap-3 p-3 rounded-md border cursor-pointer transition-colors ${
-                              selected
-                                ? 'bg-slate-50 border-slate-300'
-                                : 'border-slate-200 hover:bg-slate-50'
-                            }`}
+                        {selected && (
+                          <svg
+                            className="h-2.5 w-2.5 text-white"
+                            viewBox="0 0 12 12"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2.5"
                           >
-                            {/* Checkbox visual */}
-                            <div
-                              className={`h-4 w-4 rounded border flex items-center justify-center flex-shrink-0 ${
-                                selected
-                                  ? 'bg-slate-900 border-slate-900'
-                                  : 'border-slate-400'
-                              }`}
-                            >
-                              {selected && (
-                                <svg
-                                  className="h-3 w-3 text-white"
-                                  viewBox="0 0 12 12"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  strokeWidth="2"
-                                >
-                                  <polyline points="2,6 5,9 10,3" />
-                                </svg>
-                              )}
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <p className="font-medium text-sm text-slate-900">
-                                {webhook.name}
-                              </p>
-                              <p className="text-slate-500 text-sm truncate">
-                                {webhook.url}
-                              </p>
-                            </div>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  )}
-                </div>
+                            <polyline points="2,6 5,9 10,3" />
+                          </svg>
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-slate-800 leading-tight">
+                          {webhook.name}
+                        </p>
+                        <p className="text-xs text-slate-400 truncate mt-0.5">
+                          {webhook.url}
+                        </p>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
 
-                {/* Submit */}
-                <Button
-                  type="submit"
-                  className="w-full"
-                  disabled={submitting || formData.webhookIds.length === 0}
-                >
-                  {submitting ? (
-                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                  ) : (
-                    <Send className="h-4 w-4 mr-2" />
-                  )}
-                  Send to n8n
-                </Button>
-              </form>
-            </>
-          )}
-        </div>
-      </main>
+            <div className="pt-4 mt-auto">
+              <Button
+                className="w-full"
+                onClick={handleSubmit}
+                disabled={submitting || formData.webhookIds.length === 0}
+              >
+                {submitting ? (
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                ) : (
+                  <Send className="h-4 w-4 mr-2" />
+                )}
+                {submitting
+                  ? "Sending..."
+                  : `Send${formData.webhookIds.length > 0 ? ` (${formData.webhookIds.length})` : ""}`}
+              </Button>
+              {formData.webhookIds.length === 0 && (
+                <p className="text-xs text-slate-400 text-center mt-2">
+                  Select a webhook to send
+                </p>
+              )}
+            </div>
+          </div>
+        </main>
+      )}
     </div>
-  )
+  );
 }

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { useApp } from '@/context/app-context'
 import Nav from '@/components/nav'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -50,7 +51,6 @@ function SubmissionCard({ submission, onRetry }: { submission: Submission; onRet
   return (
     <Card>
       <CardContent className="pt-4 pb-4 space-y-4">
-        {/* Header row */}
         <div className="flex items-center gap-2 flex-wrap">
           <code className="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded">
             {submission.id.slice(0, 8)}
@@ -61,7 +61,6 @@ function SubmissionCard({ submission, onRetry }: { submission: Submission; onRet
           </span>
         </div>
 
-        {/* Sent */}
         <div>
           <p className="text-[10px] uppercase tracking-wide text-slate-400 mb-2">Sent</p>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -75,7 +74,6 @@ function SubmissionCard({ submission, onRetry }: { submission: Submission; onRet
           </div>
         </div>
 
-        {/* Received */}
         <div>
           <p className="text-[10px] uppercase tracking-wide text-slate-400 mb-2">Received</p>
           {submission.status === 'done' ? (
@@ -105,47 +103,36 @@ const FILTERS: { value: Filter; label: string }[] = [
 
 export default function HistoryPage() {
   const router = useRouter()
-  const [submissions, setSubmissions] = useState<Submission[]>([])
-  const [loading, setLoading] = useState(true)
+  const { submissions, loadSubmissions, refreshSubmissions, addSubmission } = useApp()
+  const [authLoading, setAuthLoading] = useState(true)
   const [filter, setFilter] = useState<Filter>('all')
-
-  const fetchSubmissions = async () => {
-    const res = await fetch('/api/submissions')
-    const data = await res.json()
-    setSubmissions(Array.isArray(data) ? data : [])
-  }
 
   useEffect(() => {
     const init = async () => {
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { router.push('/auth/login'); return }
-      await fetchSubmissions()
-      setLoading(false)
+      await loadSubmissions()
+      setAuthLoading(false)
     }
     init()
-  }, [router])
+  }, [router, loadSubmissions])
 
   const handleRetry = async (submission: Submission) => {
-    await fetch('/api/submissions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        pricingType: submission.pricing_type,
-        slidesURL: submission.slides_url,
-        docsURL: submission.docs_url,
-        feasibilitySheetURL: submission.feasibility_sheet_url,
-        enrichedInputSheetURL: submission.enriched_input_sheet_url,
-        webhookIds: submission.webhook_ids,
-      }),
+    await addSubmission({
+      pricingType: submission.pricing_type,
+      slidesURL: submission.slides_url,
+      docsURL: submission.docs_url,
+      feasibilitySheetURL: submission.feasibility_sheet_url,
+      enrichedInputSheetURL: submission.enriched_input_sheet_url,
+      webhookIds: submission.webhook_ids,
     })
-    await fetchSubmissions()
   }
 
   const visible = filter === 'all' ? submissions : submissions.filter(s => s.status === filter)
   const countOf = (s: SubmissionStatus) => submissions.filter(x => x.status === s).length
 
-  if (loading) return (
+  if (authLoading) return (
     <div className="flex items-center justify-center min-h-screen">
       <Loader2 className="animate-spin h-7 w-7 text-slate-400" />
     </div>
@@ -156,28 +143,21 @@ export default function HistoryPage() {
       <Nav />
       <main className="flex-1 overflow-auto p-8">
         <div className="max-w-3xl mx-auto">
-          {/* Header */}
           <div className="flex items-center mb-6">
             <h1 className="text-2xl font-bold">History</h1>
-            <Button size="sm" variant="outline" onClick={fetchSubmissions} className="ml-auto">
+            <Button size="sm" variant="outline" onClick={refreshSubmissions} className="ml-auto">
               <RefreshCw size={13} className="mr-1.5" /> Refresh
             </Button>
           </div>
 
-          {/* Filter tabs */}
           <div className="flex gap-1 mb-6 bg-slate-100 p-1 rounded-lg w-fit">
             {FILTERS.map(({ value, label }) => {
               const count = value === 'all' ? submissions.length : countOf(value as SubmissionStatus)
               return (
-                <button
-                  key={value}
-                  onClick={() => setFilter(value)}
+                <button key={value} onClick={() => setFilter(value)}
                   className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors flex items-center gap-1.5 ${
-                    filter === value
-                      ? 'bg-white shadow-sm text-slate-900'
-                      : 'text-slate-500 hover:text-slate-700'
-                  }`}
-                >
+                    filter === value ? 'bg-white shadow-sm text-slate-900' : 'text-slate-500 hover:text-slate-700'
+                  }`}>
                   {label}
                   <span className={`text-xs px-1.5 py-0.5 rounded-full ${
                     filter === value ? 'bg-slate-100 text-slate-600' : 'bg-slate-200 text-slate-400'
@@ -189,13 +169,12 @@ export default function HistoryPage() {
             })}
           </div>
 
-          {/* List */}
           {visible.length === 0 ? (
             <p className="text-sm text-slate-400 italic">No submissions found.</p>
           ) : (
             <div className="space-y-3">
-              {visible.map(submission => (
-                <SubmissionCard key={submission.id} submission={submission} onRetry={handleRetry} />
+              {visible.map(s => (
+                <SubmissionCard key={s.id} submission={s} onRetry={handleRetry} />
               ))}
             </div>
           )}
