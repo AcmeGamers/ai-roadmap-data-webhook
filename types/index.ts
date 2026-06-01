@@ -1,45 +1,32 @@
-export interface SubmissionFormData {
-  pricingType: string;
-  slidesURL: string;
-  docsURL: string;
-  feasibilitySheetURL: string;
-  enrichedInputSheetURL: string;
-}
+export type PricingType = 'AUD' | 'USD'
+export type SubmissionStatus = 'in_progress' | 'done' | 'retry'
 
-export interface WebhookConfig {
-  id: string;
-  user_id: string;
-  project_id: string | null;
-  webhook_type: 'data' | 'status' | 'error';
-  webhook_url: string;
-  is_global: boolean;
-  created_at: string;
-  updated_at: string;
+export interface Webhook {
+  id: string
+  name: string
+  url: string
+  created_at: string
 }
 
 export interface Submission {
-  id: string;
-  user_id: string;
-  project_id: string | null;
-  pricing_type: string;
-  slides_url: string | null;
-  docs_url: string | null;
-  feasibility_sheet_url: string | null;
-  enriched_input_sheet_url: string | null;
-  created_at: string;
+  id: string
+  pricing_type: PricingType
+  slides_url: string
+  docs_url: string
+  feasibility_sheet_url: string
+  enriched_input_sheet_url: string
+  status: SubmissionStatus
+  received_sheets_url: string | null
+  received_doc_url: string | null
+  webhook_ids: string[]
+  created_at: string
 }
 
-export interface WebhookLog {
-  id: string;
-  submission_id: string;
-  webhook_type: 'data' | 'status' | 'error';
-  webhook_url: string;
-  status: 'pending' | 'success' | 'failed' | 'retrying';
-  attempt_number: number;
-  response_status: number | null;
-  response_body: string | null;
-  error_message: string | null;
-  next_retry_at: string | null;
-  created_at: string;
-  updated_at: string;
+export interface SubmissionFormData {
+  pricingType: PricingType
+  slidesURL: string
+  docsURL: string
+  feasibilitySheetURL: string
+  enrichedInputSheetURL: string
+  webhookIds: string[]
 }
