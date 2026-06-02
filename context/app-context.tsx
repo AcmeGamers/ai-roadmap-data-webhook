@@ -1,12 +1,16 @@
 'use client'
 
-import { createContext, useContext, useRef, useState, useCallback, ReactNode } from 'react'
+import { createContext, useContext, useRef, useState, useCallback, useEffect, ReactNode } from 'react'
+import { createClient } from '@/lib/supabase/client'
 import type { Webhook, Submission, SubmissionFormData } from '@/types'
 
 interface AppState {
   // data
   webhooks: Webhook[]
   submissions: Submission[]
+  // template (copy from history → home)
+  template: SubmissionFormData | null
+  setTemplate: (data: SubmissionFormData | null) => void
   // loaders (no-op if already loaded)
   loadWebhooks: () => Promise<void>
   loadSubmissions: () => Promise<void>
@@ -23,8 +27,21 @@ const AppContext = createContext<AppState | null>(null)
 export function AppProvider({ children }: { children: ReactNode }) {
   const [webhooks, setWebhooks] = useState<Webhook[]>([])
   const [submissions, setSubmissions] = useState<Submission[]>([])
+  const [template, setTemplate] = useState<SubmissionFormData | null>(null)
   const webhooksLoaded = useRef(false)
   const submissionsLoaded = useRef(false)
+
+  // Real-time: update submission in state when DB row changes (e.g. n8n callback)
+  useEffect(() => {
+    const supabase = createClient()
+    const channel = supabase
+      .channel('submissions-realtime')
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'submissions' }, payload => {
+        setSubmissions(prev => prev.map(s => s.id === payload.new.id ? payload.new as Submission : s))
+      })
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [])
 
   const loadWebhooks = useCallback(async () => {
     if (webhooksLoaded.current) return
@@ -93,6 +110,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   return (
     <AppContext.Provider value={{
       webhooks, submissions,
+      template, setTemplate,
       loadWebhooks, loadSubmissions, refreshSubmissions,
       addWebhook, updateWebhook, removeWebhook, addSubmission,
     }}>

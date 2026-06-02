@@ -5,22 +5,31 @@
 // ALTER TABLE submissions ADD COLUMN IF NOT EXISTS webhook_ids text[] DEFAULT '{}';
 // ALTER TABLE webhook_configs ADD COLUMN IF NOT EXISTS name text DEFAULT '';
 
-import { createClient } from '@/lib/supabase/server'
-import { NextRequest, NextResponse } from 'next/server'
+import { createClient } from "@supabase/supabase-js";
+import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(req: NextRequest) {
-  const id = req.nextUrl.searchParams.get('id')
-  if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
+  const id = req.nextUrl.searchParams.get("id");
+  if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 });
 
-  const body = await req.json()
-  const { sheets_url, doc_url } = body
+  const body = await req.json();
+  const { slides_url, doc_url } = body;
 
-  const supabase = await createClient()
-  const { error } = await supabase
-    .from('submissions')
-    .update({ status: 'done', received_sheets_url: sheets_url, received_doc_url: doc_url })
-    .eq('id', id)
+  // Use service role key — this endpoint has no user session (called by n8n)
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ success: true })
+  const { data, error } = await supabase
+    .from("submissions")
+    .update({ status: "done", received_sheets_url: slides_url, received_doc_url: doc_url })
+    .eq("id", id)
+    .select("id");
+
+  if (error)
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  if (!data || data.length === 0)
+    return NextResponse.json({ error: "Submission not found" }, { status: 404 });
+  return NextResponse.json({ success: true });
 }

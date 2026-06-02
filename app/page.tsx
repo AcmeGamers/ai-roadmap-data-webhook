@@ -32,7 +32,7 @@ const FIELDS = [
 
 export default function NewSubmissionPage() {
   const router = useRouter();
-  const { webhooks, loadWebhooks, addSubmission } = useApp();
+  const { webhooks, loadWebhooks, addSubmission, template, setTemplate } = useApp();
   const [authLoading, setAuthLoading] = useState(true);
   const [formData, setFormData] = useState<SubmissionFormData>(defaultFormData);
   const [submitting, setSubmitting] = useState(false);
@@ -49,6 +49,10 @@ export default function NewSubmissionPage() {
         return;
       }
       await loadWebhooks();
+      if (template) {
+        setFormData(template);
+        setTemplate(null);
+      }
       setAuthLoading(false);
     };
     init();
