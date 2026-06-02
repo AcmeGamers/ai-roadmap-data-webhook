@@ -67,9 +67,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  const forwardedHost = req.headers.get("x-forwarded-host");
+  const forwardedProto = req.headers.get("x-forwarded-proto");
+  const baseUrl = forwardedHost
+    ? `${forwardedProto?.split(",")[0] ?? "https"}://${forwardedHost}`
+    : new URL(req.url).origin;
   const callbackUrl = new URL(
     "/api/webhooks/receive?id=" + submission.id,
-    req.url,
+    baseUrl,
   ).toString();
 
   for (const webhookId of webhookIds ?? []) {
